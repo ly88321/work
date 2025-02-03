@@ -937,7 +937,6 @@ PrivateKey = $key
 [Peer]
 PublicKey = $(grep PrivateKey "$WG_CONF" | cut -d " " -f 3 | wg pubkey)
 PresharedKey = $psk
-#AllowedIPs = 0.0.0.0/0, ::/0
 AllowedIPs = 10.3.2.0/24
 Endpoint = $(grep '^# ENDPOINT' "$WG_CONF" | cut -d " " -f 3):$(grep ListenPort "$WG_CONF" | cut -d " " -f 3)
 PersistentKeepalive = 25
