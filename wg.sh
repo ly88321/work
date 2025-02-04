@@ -1010,6 +1010,10 @@ start_wg_service() {
 show_client_qr_code() {
 	qrencode -t UTF8 < "$export_dir$client".conf
 	echo -e '\xE2\x86\x91 That is a QR code containing the client configuration.'
+    echo "\xE2\x86\x93 Client configuration file content:"
+    echo "----------------------------------------"
+    cat  ""$export_dir$client.conf""
+    echo "----------------------------------------"
 }
 
 finish_setup() {
@@ -1239,7 +1243,7 @@ assume_yes=0
 add_client=0
 list_clients=0
 remove_client=0
-show_client_qr=0
+show_client_=0
 remove_wg=0
 public_ip=""
 server_addr=""
@@ -1259,7 +1263,7 @@ if [ "$add_client" = 1 ]; then
 	new_client add_client
 	update_wg_conf
 	echo
-	show_client_qr_code
+	show_client__code
 	print_client_added
 	exit 0
 fi
@@ -1293,7 +1297,7 @@ if [ "$show_client_qr" = 1 ]; then
 	echo
 	get_export_dir
 	check_client_conf
-	show_client_qr_code
+	_code
 	print_client_conf
 	exit 0
 fi
@@ -1352,7 +1356,7 @@ if [[ ! -e "$WG_CONF" ]]; then
 	new_client
 	start_wg_service
 	echo
-	show_client_qr_code
+	_code
 	if [ "$auto" != 0 ] && check_dns_name "$server_addr"; then
 		show_dns_name_note "$server_addr"
 	fi
@@ -1367,7 +1371,7 @@ else
 			new_client add_client
 			update_wg_conf
 			echo
-			show_client_qr_code
+			_code
 			print_client_added
 			exit 0
 		;;
