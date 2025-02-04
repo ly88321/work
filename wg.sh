@@ -1009,10 +1009,10 @@ start_wg_service() {
 show_client_qr_code() {
 	qrencode -t UTF8 < "$export_dir$client".conf
 	echo -e '\xE2\x86\x91 That is a QR code containing the client configuration.'
-    echo "\xE2\x86\x93 Client configuration file content:"
-    echo "----------------------------------------"
-    cat  ""$export_dir$client.conf""
-    echo "----------------------------------------"
+	echo -e '\xE2\x86\x93 Client configuration file content:'
+	echo '----------------------------------------'
+	cat  "$export_dir$client.conf"
+	echo '----------------------------------------'
 }
 
 finish_setup() {
