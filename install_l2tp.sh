@@ -51,8 +51,7 @@ EOF
 # 配置 VPN 账户
 cat > /etc/ppp/chap-secrets <<EOF
 # 用户名 服务端  密码  分配IP
-admin  *  Ab123456  10.8.8.8
-user  *  passwd  *
+admin  *  passwd  10.8.8.8
 EOF
 
 # 启用 IP 转发
