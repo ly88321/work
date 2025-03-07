@@ -16,6 +16,16 @@ if [ -z "$DEFAULT_IFACE" ]; then
   exit 1
 fi
 
+# 解析命令行选项
+if [ "$1" == "-d" ] || [ "$1" == "--delete" ]; then
+    # 删除 NAT 规则
+    echo "正在删除 NAT 规则..."
+    iptables -t nat -D POSTROUTING -o "$DEFAULT_IFACE" -j MASQUERADE
+    iptables-save > /etc/iptables.rules
+    echo "NAT规则已删除！"
+    exit 0
+fi
+
 # 设置 NAT 规则，使 VPN 客户端可以通过服务器访问互联网
 iptables -t nat -A POSTROUTING -o "$DEFAULT_IFACE" -j MASQUERADE
 # iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
