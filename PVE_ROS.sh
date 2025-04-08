@@ -2,6 +2,7 @@
 #官方脚本 https://help.mikrotik.com/docs/display/ROS/CHR+ProxMox+installation
 #执行 vim install_ros.sh , 复制粘贴下列信息后，:wq 退出并保存
 #chmod +x install_ros.sh & bash install_ros.sh
+#开启contaienr能力 /system/device-mode/update container=yes
 
 # 默认配置参数
 DEFAULT_MEMORY=1024       # 默认内存大小(MB)
