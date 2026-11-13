@@ -7,8 +7,7 @@ set -Eeuo pipefail
 #
 # 功能：
 #   - 自动获取 MikroTik 最新 Stable 版本
-#   - 优先解析 MikroTik 官方 Download 页面
-#   - Stable changelog 官方页面作为备用
+#   - 从 MikroTik 官方 Stable changelog 提取 RouterOS 7.x 候选版本
 #   - 自动验证 CHR IMG ZIP 下载地址
 #   - 自动识别默认 IPv4 网卡
 #   - 自动获取 IPv4 / Prefix / Gateway
@@ -30,7 +29,6 @@ set -Eeuo pipefail
 # 基本变量
 # ============================================================
 
-MIKROTIK_DOWNLOAD_PAGE="https://mikrotik.com/download"
 MIKROTIK_STABLE_CHANGELOG="https://mikrotik.com/download/changelogs?channelFilter=stable"
 
 RAM_DIR="/dev/shm/chr-installer"
@@ -228,164 +226,67 @@ mkdir -p "$MOUNT_DIR"
 # 获取 MikroTik 最新 Stable 版本
 # ============================================================
 
-info "正在访问 MikroTik 官方下载页面..."
+info "正在通过 MikroTik Stable Changelog 获取版本..."
 
-DOWNLOAD_HTML="$(
+CHANGELOG_HTML="$(
     wget \
         -qO- \
         --timeout=20 \
         --tries=2 \
-        "$MIKROTIK_DOWNLOAD_PAGE" \
+        "$MIKROTIK_STABLE_CHANGELOG" \
         2>/dev/null || true
 )"
 
+[ -n "$CHANGELOG_HTML" ] || \
+    die "无法访问 MikroTik 官方 Stable Changelog 页面。"
+
+# 仅从 Stable 页面提取完整的 7.x / 7.x.y 版本标记。
+# 先按完整标记分词，避免把 7.xrc / 7.xbeta 或其他版本的子串当成 Stable。
+# 保留页面顺序并去重，不使用任意三段版本号的宽松匹配。
+mapfile -t VERSION_CANDIDATES < <(
+    printf '%s\n' "$CHANGELOG_HTML" |
+    grep -oE '[[:alnum:]_.+-]+' |
+    grep -E '^7\.[0-9]+(\.[0-9]+)?$' |
+    awk '!seen[$0]++'
+)
+
+[ "${#VERSION_CANDIDATES[@]}" -gt 0 ] || \
+    die "未能从 MikroTik 官方 Stable 页面解析出 RouterOS 7.x 版本。"
 
 CHR_VERSION=""
+CHR_URL=""
 
+for VERSION in "${VERSION_CANDIDATES[@]}"; do
 
-# ------------------------------------------------------------
-# 方法 1：
-# 官方下载页面中查找
-# Latest stable release v7.xx.xx
-# ------------------------------------------------------------
+    TEST_URL="https://download.mikrotik.com/routeros/${VERSION}/chr-${VERSION}.img.zip"
 
-if [ -n "$DOWNLOAD_HTML" ]; then
+    info "正在验证 RouterOS $VERSION CHR 镜像..."
 
-    CHR_VERSION="$(
-        printf '%s\n' "$DOWNLOAD_HTML" |
-        grep -oiE \
-        'Latest stable release[^0-9]*v?[0-9]+\.[0-9]+(\.[0-9]+)?' |
-        grep -oE \
-        '[0-9]+\.[0-9]+(\.[0-9]+)?' |
-        head -n1 || true
-    )"
-
-fi
-
-
-# ------------------------------------------------------------
-# 方法 2：
-# Download 页面直接寻找 CHR 下载路径
-# ------------------------------------------------------------
-
-if [ -z "$CHR_VERSION" ] && [ -n "$DOWNLOAD_HTML" ]; then
-
-    CHR_PATH="$(
-        printf '%s\n' "$DOWNLOAD_HTML" |
-        grep -oE \
-        'download\.mikrotik\.com/routeros/[0-9]+\.[0-9]+(\.[0-9]+)?/chr-[0-9]+\.[0-9]+(\.[0-9]+)?\.img\.zip' |
-        head -n1 || true
-    )"
-
-
-    if [ -n "$CHR_PATH" ]; then
-
-        CHR_VERSION="$(
-            printf '%s\n' "$CHR_PATH" |
-            sed -nE \
-            's#.*routeros/([0-9]+\.[0-9]+(\.[0-9]+)?)/chr-.*#\1#p'
-        )"
-
+    if wget \
+        --spider \
+        --timeout=20 \
+        --tries=2 \
+        "$TEST_URL" \
+        >/dev/null 2>&1
+    then
+        CHR_VERSION="$VERSION"
+        CHR_URL="$TEST_URL"
+        break
     fi
 
-fi
+    warn "RouterOS $VERSION CHR 镜像验证失败，继续尝试下一个候选版本"
 
-
-# ------------------------------------------------------------
-# 方法 3：
-# MikroTik Stable Changelog 官方页面兜底
-# ------------------------------------------------------------
-
-if [ -z "$CHR_VERSION" ]; then
-
-    warn "Download 页面未能直接识别版本"
-    info "正在通过 MikroTik Stable Changelog 获取版本..."
-
-
-    CHANGELOG_HTML="$(
-        wget \
-            -qO- \
-            --timeout=20 \
-            --tries=2 \
-            "$MIKROTIK_STABLE_CHANGELOG" \
-            2>/dev/null || true
-    )"
-
-
-    CHR_VERSION="$(
-        printf '%s\n' "$CHANGELOG_HTML" |
-        grep -oiE \
-        "(What's new in |RouterOS )[0-9]+\.[0-9]+(\.[0-9]+)?" |
-        grep -oE \
-        '[0-9]+\.[0-9]+(\.[0-9]+)?' |
-        head -n1 || true
-    )"
-
-
-    # 如果页面 HTML 格式变化，再做一次宽松匹配
-
-    if [ -z "$CHR_VERSION" ]; then
-
-        CHR_VERSION="$(
-            printf '%s\n' "$CHANGELOG_HTML" |
-            grep -oE \
-            '[0-9]+\.[0-9]+\.[0-9]+' |
-            head -n1 || true
-        )"
-
-    fi
-
-fi
-
+done
 
 [ -n "$CHR_VERSION" ] || \
-    die "无法从 MikroTik 官方网站获取最新 Stable 版本。"
-
-
-if ! [[ "$CHR_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-    die "获取到的版本号格式异常：$CHR_VERSION"
-fi
-
+    die "所有 RouterOS 7.x Stable 候选镜像均验证失败，脚本已停止，不会执行 DD。"
 
 ok "检测到最新 Stable：RouterOS $CHR_VERSION"
-
-
-# ============================================================
-# 构造 CHR 官方地址
-# ============================================================
-
-CHR_URL="https://download.mikrotik.com/routeros/${CHR_VERSION}/chr-${CHR_VERSION}.img.zip"
-
 
 echo
 info "CHR 下载地址："
 echo "$CHR_URL"
 echo
-
-
-# ============================================================
-# 验证文件存在
-# ============================================================
-
-info "正在验证 CHR 官方镜像是否存在..."
-
-
-if ! wget \
-        --spider \
-        --timeout=20 \
-        --tries=2 \
-        "$CHR_URL" \
-        >/dev/null 2>&1
-then
-
-    die "CHR 镜像地址验证失败：
-
-$CHR_URL
-
-脚本已停止，不会执行 DD。"
-
-fi
-
 
 ok "CHR 官方镜像验证成功"
 
@@ -793,9 +694,9 @@ IMAGE_SIZE="$(
 )"
 
 
-IMAGE_SIZE_MB=$(
+IMAGE_SIZE_MB=$((
     (IMAGE_SIZE + 1048575) / 1048576
-)
+))
 
 
 ok "CHR RAW 镜像大小：${IMAGE_SIZE_MB} MB"
